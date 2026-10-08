@@ -11,7 +11,7 @@ function speedFromHand(y) {
   const position = Math.max(0, Math.min(1, (0.72 - y) / 0.44));
 
   // Шаг 5 км/ч уменьшает дрожание выбранной скорости.
-  return Math.round(position * 180 / 5) * 5;
+  return Math.round(position * race.maxSpeed / 5) * 5;
 }
 const $=id=>document.getElementById(id),canvas=$('game'),ctx=canvas.getContext('2d'),video=$('video'),hc=$('hand').getContext('2d'),race=new Race(),keys=new Set();
 let mode='keyboard',stream=null,recognizer=null,loading=false,lastFrame=-1,lastDetect=0,lastSeen=-Infinity,gesture='',handX=.5,center=.5,turn=0,victorySince=0,victoryLatched=false,previous=performance.now(),w=900,h=650;
@@ -171,6 +171,25 @@ function project(z, x) {
   };
 }
 
+function mixColor(left, right, amount) {
+  const parse = value => value.match(/[a-f\d]{2}/gi).map(part => parseInt(part, 16));
+  const a = parse(left);
+  const b = parse(right);
+  return '#' + a.map((value, index) =>
+    Math.round(value + (b[index] - value) * amount).toString(16).padStart(2, '0')
+  ).join('');
+}
+
+function blendTheme(from, to, amount) {
+  return {
+    sky: from.sky.map((color, index) => mixColor(color, to.sky[index], amount)),
+    ground: mixColor(from.ground, to.ground, amount),
+    road: from.road.map((color, index) => mixColor(color, to.road[index], amount)),
+    edge: mixColor(from.edge, to.edge, amount),
+    kind: amount < 0.5 ? from.kind : to.kind
+  };
+}
+
 // Другие автомобили: вид сзади.
 function car(x, y, scale, color, style = 'coupe') {
   const cw = w * 0.23 * scale;
@@ -252,7 +271,10 @@ function car(x, y, scale, color, style = 'coupe') {
   ctx.restore();
 }
 
-function drawScenery(horizon, theme) {
+function drawScenery(horizon, theme, alpha = 1) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
   const kind = theme.kind;
   if (kind === 'city' || kind === 'neon') {
     for (let i = 0; i < 35; i++) {
@@ -268,6 +290,7 @@ function drawScenery(horizon, theme) {
         ctx.fillRect(bx + 14, horizon - bh + 8 + row * 9, 3, 4);
       }
     }
+    ctx.restore();
     return;
   }
 
@@ -284,6 +307,7 @@ function drawScenery(horizon, theme) {
         polygon([[x, peak + 10], [x - width * 0.12, peak + 35], [x + width * 0.14, peak + 32]], '#dc8260');
       }
     }
+    ctx.restore();
     return;
   }
 
@@ -295,6 +319,7 @@ function drawScenery(horizon, theme) {
       polygon([[x - 25, horizon], [x, horizon - height], [x + 25, horizon]], ctx.fillStyle);
       polygon([[x - 19, horizon - height * 0.48], [x, horizon - height * 1.42], [x + 19, horizon - height * 0.48]], ctx.fillStyle);
     }
+    ctx.restore();
     return;
   }
 
@@ -309,6 +334,7 @@ function drawScenery(horizon, theme) {
     ctx.fillRect(0, y, w * (0.42 + i * 0.05), 2);
     ctx.fillRect(w * (0.62 - i * 0.025), y + 3, w * 0.38, 2);
   }
+  ctx.restore();
 }
 
 function drawBonus(x, y, scale, kind) {
@@ -352,7 +378,8 @@ function draw(now) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const horizon = h * 0.34;
-  const theme = race.currentLocation;
+  const transition = race.locationTransition;
+  const theme = blendTheme(transition.from, transition.to, transition.progress);
 
   // Небо.
   const sky = ctx.createLinearGradient(0, 0, 0, h);
@@ -365,7 +392,8 @@ function draw(now) {
   // Земля вокруг дороги.
   ctx.fillStyle = theme.ground;
   ctx.fillRect(0, horizon, w, h - horizon);
-  drawScenery(horizon, theme);
+  drawScenery(horizon, transition.from, 1 - transition.progress);
+  drawScenery(horizon, transition.to, transition.progress);
 
   // Дорога и движущиеся обочины.
   // Рисуем от дальних участков к ближним.
@@ -442,12 +470,6 @@ function draw(now) {
     if (item.z < -2) continue;
     const p = project(item.z, item.x);
     drawBonus(p.x, p.y, p.s, item.kind);
-  }
-
-  // Лёгкая вспышка при столкновении.
-  if (race.invincible > 1.15) {
-    ctx.fillStyle = '#ff304522';
-    ctx.fillRect(0, 0, w, h);
   }
 
   // Капот.
@@ -539,11 +561,33 @@ function draw(now) {
   $('distance').textContent =
   Math.floor(race.distance).toLocaleString('ru-RU');
   $('score').textContent = race.score.toLocaleString('ru-RU');
-  $('location').textContent = race.currentLocation.name;
+  $('location').textContent = transition.progress > 0 && transition.progress < 1
+    ? `${transition.from.name} → ${transition.to.name}`
+    : race.currentLocation.name;
+  $('shieldIndicator').hidden = race.shieldTimer <= 0;
+  $('shieldTime').textContent = `${race.shieldTimer.toFixed(1)} с`;
   $('lives').textContent =
     '♥ '.repeat(race.lives) + '♡ '.repeat(3 - race.lives);
 }
 let voiceSpeed = null;
+
+// Сохраняем выбранный предел скорости между перезапусками игры.
+const maxSpeedControl = $('maxSpeed');
+try {
+  const savedMaxSpeed = Number(localStorage.getItem('fistracer.maxSpeed'));
+  if (savedMaxSpeed >= 120 && savedMaxSpeed <= 240 && savedMaxSpeed % 10 === 0) {
+    maxSpeedControl.value = String(savedMaxSpeed);
+  }
+} catch {}
+race.maxSpeed = Number(maxSpeedControl.value);
+$('maxSpeedValue').textContent = String(race.maxSpeed);
+maxSpeedControl.oninput = event => {
+  race.maxSpeed = Number(event.target.value);
+  $('maxSpeedValue').textContent = String(race.maxSpeed);
+  targetSpeed = Math.min(targetSpeed, race.maxSpeed);
+  if (voiceSpeed !== null) voiceSpeed = Math.min(voiceSpeed, race.maxSpeed);
+  try { localStorage.setItem('fistracer.maxSpeed', String(race.maxSpeed)); } catch {}
+};
 
 // Добавляем голос рядом с настройками звука.
 const voiceBox = document.createElement('div');
@@ -623,18 +667,18 @@ const voiceControl = installVoice(
     const base = voiceSpeed ?? race.speed;
 
     if (command.type === 'brake') voiceSpeed = 0;
-    if (command.type === 'gas') voiceSpeed = 120;
+    if (command.type === 'gas') voiceSpeed = Math.min(120, race.maxSpeed);
 
     if (command.type === 'faster') {
-      voiceSpeed = clamp(base + 20, 0, 180);
+      voiceSpeed = clamp(base + 20, 0, race.maxSpeed);
     }
 
     if (command.type === 'slower') {
-      voiceSpeed = clamp(base - 20, 0, 180);
+      voiceSpeed = clamp(base - 20, 0, race.maxSpeed);
     }
 
     if (command.type === 'speed') {
-      voiceSpeed = command.value;
+      voiceSpeed = clamp(command.value, 0, race.maxSpeed);
     }
 
     return `Задано голосом: ${Math.round(voiceSpeed)} км/ч`;
@@ -715,7 +759,7 @@ function loop(now) {
       if (
         Math.abs(requested - targetSpeed) >= 10 ||
         requested === 0 ||
-        requested === 180
+        requested === race.maxSpeed
       ) {
         targetSpeed = requested;
       }

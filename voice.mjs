@@ -13,13 +13,14 @@ export function parseCommand(text) {
       'сорок': 40, 'пятьдесят': 50, 'шестьдесят': 60,
       'семьдесят': 70, 'восемьдесят': 80, 'девяносто': 90,
       'сто': 100, 'сто двадцать': 120, 'сто пятьдесят': 150,
-      'сто восемьдесят': 180
+      'сто восемьдесят': 180, 'двести': 200, 'двести двадцать': 220,
+      'двести сорок': 240
     };
     const raw = speedMatch[1]
       .replace(/\s+(?:километров?(?:\s+в\s+час)?|километра|км(?:\s*ч)?|кмч|пожалуйста)$/g, '')
       .trim();
     const value = /^\d{1,3}$/.test(raw) ? Number(raw) : numbers[raw];
-    if (Number.isFinite(value) && value >= 0 && value <= 180) {
+    if (Number.isFinite(value) && value >= 0 && value <= 240) {
       return { type: 'speed', value };
     }
   }
@@ -206,10 +207,16 @@ export function installVoice(button, status, onCommand, onStop) {
 
   let enabled = false;
   let timer;
+  let interimTimer;
+  let fastCommand = null;
+  let interimCandidate = null;
 
   function stop(message = 'Голосовое управление выключено') {
     enabled = false;
     clearTimeout(timer);
+    clearTimeout(interimTimer);
+    fastCommand = null;
+    interimCandidate = null;
     try { recognition.abort(); } catch {}
     button.textContent = 'Включить голос';
     status.textContent = message;
@@ -245,6 +252,9 @@ export function installVoice(button, status, onCommand, onStop) {
   };
 
   recognition.onspeechstart = () => {
+    clearTimeout(interimTimer);
+    interimCandidate = null;
+    fastCommand = null;
     if (enabled) status.textContent = 'Речь слышна, распознаю…';
   };
 
@@ -258,13 +268,33 @@ export function installVoice(button, status, onCommand, onStop) {
       if (!best) continue;
       if (!result.isFinal) {
         status.textContent = `Слышу: «${best.transcript}…»`;
+        const command = parseCommand(best.transcript);
+        if (command) {
+          const key = JSON.stringify(command);
+          if (key !== interimCandidate) {
+            clearTimeout(interimTimer);
+            interimCandidate = key;
+            interimTimer = setTimeout(() => {
+              if (!enabled || document.hidden || !document.hasFocus()) return;
+              fastCommand = key;
+              status.textContent = `Команда: ${onCommand(command)}`;
+            }, 220);
+          }
+        } else {
+          clearTimeout(interimTimer);
+          interimCandidate = null;
+        }
         continue;
       }
 
       const command = parseCommand(best.transcript);
+      clearTimeout(interimTimer);
+      const key = command ? JSON.stringify(command) : null;
       const response = command
-        ? onCommand(command)
+        ? (key === fastCommand ? 'выполнено' : onCommand(command))
         : `Не понял «${best.transcript}». Попробуй: «старт», «пауза», «газ» или «тормоз».`;
+      fastCommand = null;
+      interimCandidate = null;
       const confidence = Number.isFinite(best.confidence)
         ? ` · ${Math.round(best.confidence * 100)}%`
         : '';
@@ -278,6 +308,9 @@ export function installVoice(button, status, onCommand, onStop) {
   };
 
   recognition.onend = () => {
+    clearTimeout(interimTimer);
+    fastCommand = null;
+    interimCandidate = null;
     if (enabled) timer = setTimeout(listen, 500);
   };
 

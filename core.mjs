@@ -34,10 +34,12 @@ export class Race {
   }
 
   reset() {
+    const maxSpeed = this.maxSpeed ?? 240;
     Object.assign(this, {
       state: 'ready',
       x: 0,
       speed: 0,
+      maxSpeed,
       distance: 0,
       score: 0,
       lives: 3,
@@ -47,6 +49,8 @@ export class Race {
       spawn: 1.5,
       bonusSpawn: 1.7,
       invincible: 0,
+      shieldTimer: 0,
+      boostTimer: 0,
       route: shuffled(LOCATIONS),
       locationIndex: 0
     });
@@ -54,6 +58,15 @@ export class Race {
 
   get currentLocation() {
     return this.route[this.locationIndex % this.route.length];
+  }
+
+  get locationTransition() {
+    const progressInBiome = this.distance % 900;
+    return {
+      from: this.currentLocation,
+      to: this.route[(this.locationIndex + 1) % this.route.length],
+      progress: clamp((progressInBiome - 600) / 300, 0, 1)
+    };
   }
 
   start() {
@@ -79,11 +92,17 @@ export class Race {
   } = {}) {
     const oldSpeed = this.speed;
     if (Number.isFinite(targetSpeed)) {
-      const wanted = clamp(targetSpeed, 0, 180);
+      const wanted = clamp(targetSpeed, 0, this.maxSpeed);
       this.speed += clamp(wanted - this.speed, -220 * dt, 75 * dt);
     } else {
       const acceleration = brake ? -220 : gas ? 75 : -25;
-      this.speed = clamp(this.speed + acceleration * dt, 0, 180);
+      this.speed = clamp(this.speed + acceleration * dt, 0, this.maxSpeed);
+    }
+
+    this.shieldTimer = Math.max(0, this.shieldTimer - dt);
+    this.boostTimer = Math.max(0, this.boostTimer - dt);
+    if (this.boostTimer > 0) {
+      this.speed = Math.min(this.maxSpeed, this.speed + 105 * dt);
     }
 
     const steeringPower = (0.55 + this.speed / 110) * Math.min(1, this.speed / 15);
@@ -110,7 +129,7 @@ export class Race {
       const oldZ = car.z;
       car.z += (car.speed ?? 65) / 3.6 * dt - travel;
       const overlap = Math.min(oldZ, car.z) <= 3 && Math.max(oldZ, car.z) >= -2;
-      if (!car.hit && overlap && Math.abs(car.x - this.x) < 0.30 && this.invincible === 0) {
+      if (!car.hit && overlap && Math.abs(car.x - this.x) < 0.30 && this.invincible === 0 && this.shieldTimer === 0) {
         car.hit = true;
         this.lives = Math.max(0, this.lives - 1);
         this.speed *= 0.35;
@@ -148,8 +167,11 @@ export class Race {
       const collected = Math.min(oldZ, item.z) <= 3 && Math.max(oldZ, item.z) >= -2;
       if (!item.collected && collected && Math.abs(item.x - this.x) < 0.36) {
         item.collected = true;
-        if (item.kind === 'boost') this.speed = Math.min(180, this.speed + 28);
-        if (item.kind === 'shield') this.invincible = Math.max(this.invincible, 5);
+        if (item.kind === 'boost') {
+          this.speed = Math.min(this.maxSpeed, this.speed + 28);
+          this.boostTimer = 3.5;
+        }
+        if (item.kind === 'shield') this.shieldTimer = 6;
         if (item.kind === 'star') this.score += 100;
         this.events.push({ type: 'bonus', kind: item.kind, text: item.label });
       }
