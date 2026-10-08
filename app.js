@@ -1,4 +1,4 @@
-import {installVoice} from './voice.mjs';
+import {installVoice, diagnoseVoice} from './voice.mjs';
 import {RaceAudio} from './audio.mjs';
 import {Race,clamp,steering} from './core.mjs';
 // Высота руки и выбранная скорость.
@@ -561,6 +561,19 @@ voiceBox.innerHTML = `
     Микрофон выключен
   </p>
 
+  <button id="voiceTestButton" style="width:100%;margin-top:8px">
+    Проверить микрофон и распознавание
+  </button>
+
+  <progress id="voiceLevel" max="100" value="0"
+    style="width:100%;height:8px;margin-top:8px"></progress>
+
+  <p id="voiceTestStatus"
+     style="font-size:11px;line-height:1.45;white-space:pre-line"
+     role="status" aria-live="polite">
+    Тест отдельно проверит уровень микрофона и распознавание команды «старт».
+  </p>
+
   <small>
     Старт · пауза · газ · тормоз · скорость 60 · рука
   </small>
@@ -572,7 +585,7 @@ voiceBox.innerHTML = `
 
 $('mute').closest('.panel').append(voiceBox);
 
-installVoice(
+const voiceControl = installVoice(
   $('voiceButton'),
   $('voiceStatus'),
 
@@ -632,6 +645,17 @@ installVoice(
     pause('Голос выключен. Продолжи кнопкой или жестом.');
   }
 );
+
+$('voiceTestButton').onclick = async () => {
+  if (voiceControl.isEnabled()) {
+    voiceControl.stop('Управление остановлено на время проверки.');
+  }
+  await diagnoseVoice(
+    $('voiceTestButton'),
+    $('voiceTestStatus'),
+    $('voiceLevel')
+  );
+};
 
 // В присланном коде обработчик отпускания клавиш отсутствовал.
 window.addEventListener('keyup', e => keys.delete(e.code));
