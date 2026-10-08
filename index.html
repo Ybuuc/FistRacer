@@ -1,0 +1,154 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fist Racer</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080d18;color:#edf4ff;font:15px system-ui}header{display:flex;justify-content:space-between;align-items:center;padding:20px 4vw;border-bottom:1px solid #263346}h1{font-size:23px;margin:0;letter-spacing:4px}header span,.muted{color:#8da0bc}main{max-width:1440px;margin:auto;padding:24px;display:grid;grid-template-columns:1fr 320px;gap:24px}.stage{position:relative;border:1px solid #293b53;border-radius:18px;overflow:hidden;background:#101928;min-height:560px}#game{width:100%;height:100%;position:absolute;inset:0}.hud{position:absolute;top:24px;left:24px;right:24px;display:flex;justify-content:space-between;pointer-events:none}.metric{font-size:30px;font-weight:750}.metric small{display:block;font-size:11px;color:#aabbd1;letter-spacing:2px}.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#07101a77;text-align:center;padding:30px}.overlay>div{max-width:470px;padding:28px;border:1px solid #5f8090;border-radius:20px;background:#0b1627ed}.overlay h2{font-size:34px;margin:0 0 12px}.overlay p{line-height:1.7;color:#b8c6dc}.hidden{display:none!important}.panel{border:1px solid #27394f;border-radius:16px;background:#101a2a;padding:18px;margin-bottom:16px}h2{font-size:16px;margin:0 0 16px}button,select{font:inherit;color:#eef8ff;border:1px solid #3c526e;border-radius:9px;padding:11px 14px;background:#1b2c42;cursor:pointer}button:hover{filter:brightness(1.25)}button:disabled{opacity:.5;cursor:wait}.primary{background:#89f1cf;color:#092a25;border:0;font-weight:700}#cameraButton{width:100%;margin-top:12px}.cam{aspect-ratio:4/3;background:#060b13;border-radius:10px;position:relative;overflow:hidden}video{width:100%;height:100%;object-fit:fill;transform:scaleX(-1)}#hand{position:absolute;width:100%;height:100%;inset:0}.cam::after{content:'';position:absolute;top:0;bottom:0;left:50%;border-left:1px dashed #89f1cf66;pointer-events:none}#status{font-size:13px;line-height:1.5;color:#aec1d9;min-height:40px;margin-top:10px}.gesture{display:flex;gap:14px;align-items:center;margin:16px 0}.gesture b{font-size:25px}.gesture small{display:block;color:#94a6bf;margin-top:3px}label{display:block;margin:12px 0;color:#aec1d9;font-size:13px}input[type=range]{width:100%;accent-color:#89f1cf}select{width:100%}.progress{height:4px;background:#21334a;margin-top:10px;border-radius:4px}.progress i{display:block;height:100%;width:0;background:#89f1cf}footer{font-size:12px;color:#8094b1;line-height:1.7}.tag{color:#89f1cf;font-size:11px;letter-spacing:2px;margin-bottom:12px}.location{position:absolute;left:24px;bottom:20px;padding:8px 12px;border:1px solid #89f1cf66;border-radius:999px;background:#081322cc;color:#d7fff4;font-size:12px;letter-spacing:.04em;pointer-events:none}.event{position:absolute;left:50%;bottom:20px;transform:translate(-50%,12px);padding:10px 16px;border:1px solid #89f1cf88;border-radius:999px;background:#081322e8;color:#eafff8;font-weight:700;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}.event.show{opacity:1;transform:translate(-50%,0)}@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}.stage{min-height:65vh}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.panel{margin:0}header span{display:none}}@media(max-width:520px){aside{display:block}.panel{margin-bottom:12px}}
+/* Камера сверху, управление и звук — рядом под ней */
+@media (min-width: 851px) {
+  main {
+    grid-template-columns: minmax(0, 1fr) 420px;
+    height: calc(100dvh - 75px);
+    min-height: 0;
+    padding: 16px 24px;
+    gap: 18px;
+  }
+
+  .stage {
+    min-height: 0;
+  }
+
+  aside {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 145px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    min-height: 0;
+  }
+
+  aside > .panel {
+    margin: 0;
+    padding: 12px;
+    min-width: 0;
+  }
+
+  /* Камера всегда остаётся видимой */
+  aside > .panel:first-child {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .cam {
+    width: 240px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  #status {
+    min-height: 0;
+    margin-top: 6px;
+  }
+
+  #cameraButton {
+    margin-top: 8px;
+    padding: 8px;
+  }
+
+  /* Управление слева */
+  aside > .panel:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+    overflow-y: auto;
+  }
+
+  /* Звук справа от управления */
+  aside > .panel:nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  #mute {
+    width: 100%;
+    padding: 9px 6px;
+    font-size: 13px;
+  }
+
+  .gesture {
+    margin: 10px 0;
+    gap: 10px;
+  }
+
+  aside > footer {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+}
+@media (min-width: 851px) {
+  body {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    flex-shrink: 0;
+  }
+
+  main {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  aside {
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  /* Обе панели помещаются между камерой и подсказкой. */
+  aside > .panel:nth-child(2),
+  aside > .panel:nth-child(3) {
+    min-height: 0;
+    height: 100%;
+    align-self: stretch;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+  }
+
+  aside > footer {
+    position: static;
+    margin: 0;
+    padding-top: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  aside .panel p,
+  aside .panel small {
+    display: block;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  aside .panel button {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  /* Камера занимает меньше места на невысоком экране. */
+  .cam {
+    height: clamp(110px, 22dvh, 180px);
+    width: auto;
+    aspect-ratio: 4 / 3;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+}
+</style>
+<header><h1>FIST<span style="color:#89f1cf"> / </span>RACER</h1><span>Твои руки. Твоя траектория.</span></header>
+<main><section class="stage"><canvas id="game"></canvas><div class="hud"><div class="metric"><span id="speed">0</span><small>КМ/Ч</small></div><div class="metric"><span id="distance">0</span><small>МЕТРОВ · ∞</small></div><div class="metric"><span id="lives">♥ ♥ ♥</span><small>ПРОЧНОСТЬ</small></div><div class="metric"><span id="score">0</span><small>ОЧКИ</small></div></div><div id="location" class="location">Ночной город</div><div id="event" class="event" role="status" aria-live="polite"></div><div id="overlay" class="overlay"><div><div class="tag">GESTURE CONTROL • NIGHT RUN</div><h2 id="title">Возьми управление<br>в свои руки</h2><p id="message">Объезжай машины и проедь как можно дальше.<br>Включи камеру и удерживай ✌️ одну секунду.<br>Затем сожми кулак, чтобы разогнаться.</p><button id="start" class="primary">Старт / продолжить</button></div></div></section>
+<aside><section class="panel"><h2>Камера и жесты</h2><div class="cam"><video id="video" autoplay playsinline muted></video><canvas id="hand" width="640" height="480"></canvas></div><div id="status" role="status">Камера выключена. Можно проверить игру клавиатурой.</div><div class="progress"><i id="hold"></i></div><button id="cameraButton" class="primary">Включить камеру</button></section>
+<section class="panel"><h2>Как управлять</h2><div class="gesture"><b>✊</b><div>Руль + газ<small>Двигай кулак влево и вправо</small></div></div><div class="gesture"><b>✋</b><div>Тормоз<small>Раскрой ладонь перед камерой</small></div></div><div class="gesture"><b>✌️</b><div>Старт / продолжить<small>Удерживай одну секунду</small></div></div><label>Управление<select id="mode"><option value="keyboard">Клавиатура</option><option value="camera">Камера</option></select></label><label>Чувствительность руля<input id="sensitivity" type="range" min="1" max="3.5" step="0.1" value="2"></label><button id="center">Центр руля</button> <button id="pause">Пауза</button></section>
+<section class="panel"><h2>Звук гонки</h2><button id="mute" aria-pressed="false">Звук: вкл</button><label>Громкость<input id="volume" type="range" min="0" max="1" step="0.01" value="0.4"></label><small class="muted">Двигатель · тормоза · столкновения</small></section><footer>Клавиатура: ← → / A D — руль, ↑ / W — газ, пробел / ↓ — тормоз, Enter — старт, Esc — пауза.<br>Кадры обрабатываются на компьютере. Интернет нужен для загрузки модели.</footer></aside></main><script type="module" src="app.js"></script></html>
